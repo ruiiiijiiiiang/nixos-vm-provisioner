@@ -11,7 +11,6 @@ let
   guestSystem = nixpkgs.lib.nixosSystem {
     inherit system;
     modules = [
-      inputs.disko.nixosModules.disko
       self.nixosModules.guest
       (
         { ... }:

@@ -37,7 +37,14 @@
             ];
             _module.args.inputs = inputs;
           };
-        guest = import ./modules/guest.nix;
+        guest =
+          { ... }:
+          {
+            imports = [
+              ./modules/guest.nix
+              inputs.disko.nixosModules.disko
+            ];
+          };
         default = self.nixosModules.host;
       };
 

@@ -29,11 +29,10 @@ The simplest setup is:
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    disko.url = "github:nix-community/disko";
-    nixos-vm-provisioner.url = "path:./nixos-vm-provisioner";
+    nixos-vm-provisioner.url = "github:ruiiiijiiiiang/nixos-vm-provisioner";
   };
 
-  outputs = { self, nixpkgs, disko, nixos-vm-provisioner, ... }: {
+  outputs = { self, nixpkgs, nixos-vm-provisioner, ... }: {
     nixosConfigurations.hypervisor = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
@@ -45,7 +44,6 @@ The simplest setup is:
     nixosConfigurations.my-guest = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
-        disko.nixosModules.disko
         nixos-vm-provisioner.nixosModules.guest
         ./guest-config.nix
       ];
@@ -243,8 +241,15 @@ Set per-guest overrides inside the guest with `nixvirtExtraConfigs`:
 
 ## Requirements
 
-- The guest system must import `disko.nixosModules.disko`.
 - The guest system must import `nixos-vm-provisioner.nixosModules.guest`.
 - The host system must import `nixos-vm-provisioner.nixosModules.host`.
 - The guest root filesystem must be defined by the evaluated NixOS configuration.
 - `volumeGroup` is required only for `storage.type = "lvm"`.
+
+## Contributing
+
+Contributions are welcome. Bug reports, design feedback, documentation improvements, and implementation changes are all useful.
+
+## License
+
+This project is released under The Unlicense. See `LICENSE`.
