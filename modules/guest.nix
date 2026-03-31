@@ -30,6 +30,16 @@ with lib;
         content = {
           type = "gpt";
           partitions = {
+            ESP = {
+              size = "512M";
+              type = "EF00";
+              content = {
+                type = "filesystem";
+                format = "vfat";
+                mountpoint = "/boot";
+                mountOptions = [ "umask=0077" ];
+              };
+            };
             root = {
               size = "100%";
               content = {
@@ -45,9 +55,7 @@ with lib;
 
     boot = {
       loader = {
-        grub.enable = false;
-        systemd-boot.enable = false;
-        generic-extlinux-compatible.enable = false;
+        systemd-boot.enable = mkDefault true;
       };
 
       kernelParams = [

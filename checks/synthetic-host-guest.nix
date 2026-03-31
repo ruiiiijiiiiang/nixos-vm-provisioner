@@ -1,6 +1,5 @@
 {
   self,
-  inputs,
   nixpkgs,
   system,
 }:
@@ -35,6 +34,20 @@ let
               };
             };
           };
+        }
+      )
+    ];
+  };
+
+  defaultGuestSystem = nixpkgs.lib.nixosSystem {
+    inherit system;
+    modules = [
+      self.nixosModules.guest
+      (
+        { ... }:
+        {
+          system.stateVersion = "26.05";
+          nixos-vm-provisioner.guest.enable = true;
         }
       )
     ];
@@ -104,17 +117,32 @@ pkgs.runCommand "synthetic-host-guest-check"
   }
   ''
     grep -F -- "<uuid>" ${domain.definition} >/dev/null
+    grep -F -- "<loader readonly='yes' secure='no' type='pflash'>/run/libvirt/nix-ovmf/edk2-x86_64-code.fd</loader>" ${domain.definition} >/dev/null
+    grep -F -- "<boot dev='hd'/>" ${domain.definition} >/dev/null
     grep -F -- "<source file='/var/lib/libvirt/images/synthetic.img'/>" ${domain.definition} >/dev/null
-    grep -F -- "root=/dev/disk/by-partlabel/disk-main-root" ${domain.definition} >/dev/null
-    grep -F -- "rootfstype=btrfs" ${domain.definition} >/dev/null
-    grep -F -- "rootflags=subvol=@root" ${domain.definition} >/dev/null
     grep -F -- "<model type='virtio' heads='1' primary='yes'/>" ${domain.definition} >/dev/null
+    if grep -F -- "<kernel>" ${domain.definition} >/dev/null; then
+      echo "domain unexpectedly contains a host-managed kernel" >&2
+      exit 1
+    fi
+    if grep -F -- "<initrd>" ${domain.definition} >/dev/null; then
+      echo "domain unexpectedly contains a host-managed initrd" >&2
+      exit 1
+    fi
 
     grep -F -- "IMAGE_PATH=/var/lib/libvirt/images/synthetic.img" ${prepareScript} >/dev/null
 
     grep -F -- "#synthetic-guest" ${provisionScript} >/dev/null
     grep -F -- "--disk main" ${provisionScript} >/dev/null
     grep -F -- "TARGET_DEV=/var/lib/libvirt/images/synthetic.img" ${provisionScript} >/dev/null
+    grep -F -- "MARKER_PATH=/var/lib/nixos-vm-provisioner/synthetic.provisioned" ${provisionScript} >/dev/null
+    grep -F -- 'if [ -e "$MARKER_PATH" ]; then' ${provisionScript} >/dev/null
+    grep -F -- '/bin/touch "$MARKER_PATH"' ${provisionScript} >/dev/null
+    grep -F -- "already has signatures, but no provisioning marker exists" ${provisionScript} >/dev/null
+    if grep -F -- "--no-bootloader" ${provisionScript} >/dev/null; then
+      echo "provisioning unexpectedly disables guest bootloader installation" >&2
+      exit 1
+    fi
 
     grep -F -- "VG_NAME=vg-test" ${lvmPrepareScript} >/dev/null
     grep -F -- '/bin/vgs "$VG_NAME"' ${lvmPrepareScript} >/dev/null
@@ -122,6 +150,22 @@ pkgs.runCommand "synthetic-host-guest-check"
     grep -F -- '/bin/lvs "$LV_PATH"' ${lvmPrepareScript} >/dev/null
     grep -F -- '/bin/lvcreate -L 8G -n lvm "$VG_NAME"' ${lvmPrepareScript} >/dev/null
     grep -F -- "TARGET_DEV=/dev/vg-test/lvm" ${lvmProvisionScript} >/dev/null
+    test "${
+      if
+        builtins.elem "d /var/lib/nixos-vm-provisioner 0755 root root -" hostSystem.config.systemd.tmpfiles.rules
+      then
+        "1"
+      else
+        "0"
+    }" = "1"
+
+    test "${if defaultGuestSystem.config.boot.loader.systemd-boot.enable then "1" else "0"}" = "1"
+    test "${if defaultGuestSystem.config.boot.loader.grub.enable then "1" else "0"}" = "0"
+    test "${if defaultGuestSystem.config.boot.loader.efi.canTouchEfiVariables then "1" else "0"}" = "0"
+    test "${defaultGuestSystem.config.disko.devices.disk.primary.content.partitions.ESP.type}" = "EF00"
+    test "${defaultGuestSystem.config.disko.devices.disk.primary.content.partitions.ESP.content.format}" = "vfat"
+    test "${defaultGuestSystem.config.disko.devices.disk.primary.content.partitions.ESP.content.mountpoint}" = "/boot"
+    test "${defaultGuestSystem.config.disko.devices.disk.primary.content.partitions.root.content.format}" = "ext4"
 
     touch "$out"
   ''

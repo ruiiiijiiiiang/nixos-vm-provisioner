@@ -98,6 +98,8 @@ let
 
   getGuestInstallFlakeRef = _name: guest: "${guest.flakeRef}#${guest.flakeAttr}";
 
+  getGuestProvisionMarker = name: "${cfg.statePath}/${name}.provisioned";
+
   makeStableUuid =
     seed:
     let
@@ -108,34 +110,6 @@ let
   getGuestUuid =
     name: guest:
     if guest.uuid != null then guest.uuid else makeStableUuid "nixos-vm-provisioner:${name}";
-
-  getGuestRootFs =
-    name: guest:
-    let
-      rootFs = guest.nixosConfig.config.fileSystems."/";
-    in
-    if rootFs ? device then
-      rootFs
-    else
-      throw "Guest VM '${name}' must define fileSystems.\"/\".device so the host can build the kernel command line.";
-
-  getGuestRootParam =
-    name: guest:
-    let
-      rootFs = getGuestRootFs name guest;
-      rootFsType = rootFs.fsType or null;
-      rootFlags = lib.filter (opt: lib.hasPrefix "subvol=" opt || lib.hasPrefix "subvolid=" opt) (
-        rootFs.options or [ ]
-      );
-      bootArgs =
-        if rootFsType == "zfs" then
-          [ "zfs=${rootFs.device}" ]
-        else
-          [ "root=${rootFs.device}" ]
-          ++ lib.optional (rootFsType != null && rootFsType != "") "rootfstype=${rootFsType}"
-          ++ lib.optional (rootFlags != [ ]) "rootflags=${concatStringsSep "," rootFlags}";
-    in
-    concatStringsSep " " (bootArgs ++ [ "rw" ] ++ (guest.nixosConfig.config.boot.kernelParams or [ ]));
 
   makeDomain = name: guest: {
     definition = inputs.NixVirt.lib.domain.writeXML (
@@ -155,9 +129,13 @@ let
         {
           vcpu.placement = "static";
           os = {
-            kernel.path = "${guest.nixosConfig.config.system.build.kernel}/${guest.nixosConfig.config.system.boot.loader.kernelFile}";
-            initrd.path = toString guest.nixosConfig.config.system.build.initialRamdisk;
-            cmdline.options = getGuestRootParam name guest;
+            loader = {
+              readonly = true;
+              secure = false;
+              type = "pflash";
+              path = "/run/libvirt/nix-ovmf/edk2-x86_64-code.fd";
+            };
+            boot = [ { dev = "hd"; } ];
           };
           devices = {
             disk = [
@@ -222,6 +200,11 @@ in
       default = "/var/lib/libvirt/images";
       description = "Path for file-backed guest images.";
     };
+    statePath = mkOption {
+      type = types.str;
+      default = "/var/lib/nixos-vm-provisioner";
+      description = "Path for provisioning state markers managed by the host module.";
+    };
     guests = mkOption {
       type = types.attrsOf (types.submodule guestOpts);
       default = { };
@@ -255,8 +238,10 @@ in
           message = "Guest VM '${name}' must have 'nixos-vm-provisioner.guest.enable = true;' set in its configuration.";
         }
         {
-          assertion = hasAttrByPath [ "config" "fileSystems" "/" "device" ] guest.nixosConfig;
-          message = "Guest VM '${name}' must define fileSystems.\"/\".device so the host can determine the kernel root device.";
+          assertion =
+            hasAttrByPath [ "pkgs" "stdenv" "hostPlatform" "system" ] guest.nixosConfig
+            && guest.nixosConfig.pkgs.stdenv.hostPlatform.system == pkgs.stdenv.hostPlatform.system;
+          message = "Guest VM '${name}' system must match the host system.";
         }
         {
           assertion =
@@ -284,6 +269,10 @@ in
       ++ lib.optional hasLvmGuest lvm2;
 
     virtualisation.libvirtd.enable = true;
+
+    systemd.tmpfiles.rules = [
+      "d ${cfg.statePath} 0755 root root -"
+    ];
 
     virtualisation.libvirt.connections."qemu:///system".domains = mapAttrsToList (
       name: guest: makeDomain name guest
@@ -341,11 +330,19 @@ in
             RemainAfterExit = true;
             ExecStart = pkgs.writeShellScript "provision-${name}" ''
               TARGET_DEV=${escapeShellArg (getTargetDev name guest)}
-              if ! blkid "$TARGET_DEV" >/dev/null 2>&1; then
+              MARKER_PATH=${escapeShellArg (getGuestProvisionMarker name)}
+              ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$MARKER_PATH")"
+
+              if [ -e "$MARKER_PATH" ]; then
+                echo "Guest ${name} was already provisioned by nixos-vm-provisioner. Skipping provisioning."
+              elif ! blkid "$TARGET_DEV" >/dev/null 2>&1; then
                 echo "Device $TARGET_DEV is unformatted. Starting disko-install..."
-                disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV" --no-bootloader
+                disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV"
+                ${pkgs.coreutils}/bin/touch "$MARKER_PATH"
               else
-                echo "Device $TARGET_DEV already has a partition table. Skipping provisioning."
+                echo "Device $TARGET_DEV already has signatures, but no provisioning marker exists at $MARKER_PATH." >&2
+                echo "Refusing to skip provisioning automatically because the disk may not belong to this module." >&2
+                exit 1
               fi
             '';
           };
