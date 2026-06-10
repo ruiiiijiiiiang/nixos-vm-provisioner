@@ -48,12 +48,10 @@
         default = self.nixosModules.host;
       };
 
-      checks = forAllSystems (
-        system: {
-          synthetic-host-guest = import ./checks/synthetic-host-guest.nix {
-            inherit self inputs nixpkgs system;
-          };
-        }
-      );
+      checks = forAllSystems (system: {
+        synthetic-host-guest = import ./checks/synthetic-host-guest.nix {
+          inherit self nixpkgs system;
+        };
+      });
     };
 }

@@ -133,7 +133,11 @@ let
               readonly = true;
               secure = false;
               type = "pflash";
-              path = "/run/libvirt/nix-ovmf/edk2-x86_64-code.fd";
+              path = cfg.loaderCodePath;
+            };
+            nvram = {
+              template = cfg.loaderVarsPath;
+              path = "${cfg.statePath}/nvram/${name}_VARS.fd";
             };
             boot = [ { dev = "hd"; } ];
           };
@@ -215,6 +219,16 @@ in
       default = { };
       description = "Default NixVirt domain configuration applied to all guests, overriding the base linux template.";
     };
+    loaderCodePath = mkOption {
+      type = types.str;
+      default = "/run/libvirt/nix-ovmf/edk2-${pkgs.stdenv.hostPlatform.qemuArch}-code.fd";
+      description = "Path to the UEFI/OVMF firmware code file.";
+    };
+    loaderVarsPath = mkOption {
+      type = types.str;
+      default = "/run/libvirt/nix-ovmf/edk2-${pkgs.stdenv.hostPlatform.qemuArch}-vars.fd";
+      description = "Path to the UEFI/OVMF firmware variables template file.";
+    };
   };
 
   config = mkIf cfg.enable {
@@ -272,6 +286,7 @@ in
 
     systemd.tmpfiles.rules = [
       "d ${cfg.statePath} 0755 root root -"
+      "d ${cfg.statePath}/nvram 0700 root root -"
     ];
 
     virtualisation.libvirt.connections."qemu:///system".domains = mapAttrsToList (
@@ -337,7 +352,24 @@ in
                 echo "Guest ${name} was already provisioned by nixos-vm-provisioner. Skipping provisioning."
               elif ! blkid "$TARGET_DEV" >/dev/null 2>&1; then
                 echo "Device $TARGET_DEV is unformatted. Starting disko-install..."
-                disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV"
+                ${
+                  if guest.storage.type == "file" then
+                    ''
+                      # We must use a loop device for files so that partition block devices are created.
+                      LOOP_DEV=$(${pkgs.util-linux}/bin/losetup --show -fP "$TARGET_DEV")
+                      cleanup() {
+                        echo "Cleaning up mounts and loop device $LOOP_DEV"
+                        ${pkgs.util-linux}/bin/umount -R /mnt/disko-install-root || true
+                        ${pkgs.util-linux}/bin/losetup -d "$LOOP_DEV" || true
+                      }
+                      trap cleanup EXIT
+                      disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$LOOP_DEV"
+                    ''
+                  else
+                    ''
+                      disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV"
+                    ''
+                }
                 ${pkgs.coreutils}/bin/touch "$MARKER_PATH"
               else
                 echo "Device $TARGET_DEV already has signatures, but no provisioning marker exists at $MARKER_PATH." >&2

@@ -118,6 +118,7 @@ pkgs.runCommand "synthetic-host-guest-check"
   ''
     grep -F -- "<uuid>" ${domain.definition} >/dev/null
     grep -F -- "<loader readonly='yes' secure='no' type='pflash'>/run/libvirt/nix-ovmf/edk2-x86_64-code.fd</loader>" ${domain.definition} >/dev/null
+    grep -F -- "<nvram template='/run/libvirt/nix-ovmf/edk2-x86_64-vars.fd'>/var/lib/nixos-vm-provisioner/nvram/synthetic_VARS.fd</nvram>" ${domain.definition} >/dev/null
     grep -F -- "<boot dev='hd'/>" ${domain.definition} >/dev/null
     grep -F -- "<source file='/var/lib/libvirt/images/synthetic.img'/>" ${domain.definition} >/dev/null
     grep -F -- "<model type='virtio' heads='1' primary='yes'/>" ${domain.definition} >/dev/null
@@ -139,6 +140,7 @@ pkgs.runCommand "synthetic-host-guest-check"
     grep -F -- 'if [ -e "$MARKER_PATH" ]; then' ${provisionScript} >/dev/null
     grep -F -- '/bin/touch "$MARKER_PATH"' ${provisionScript} >/dev/null
     grep -F -- "already has signatures, but no provisioning marker exists" ${provisionScript} >/dev/null
+    grep -F -- "losetup" ${provisionScript} >/dev/null
     if grep -F -- "--no-bootloader" ${provisionScript} >/dev/null; then
       echo "provisioning unexpectedly disables guest bootloader installation" >&2
       exit 1
@@ -150,9 +152,21 @@ pkgs.runCommand "synthetic-host-guest-check"
     grep -F -- '/bin/lvs "$LV_PATH"' ${lvmPrepareScript} >/dev/null
     grep -F -- '/bin/lvcreate -L 8G -n lvm "$VG_NAME"' ${lvmPrepareScript} >/dev/null
     grep -F -- "TARGET_DEV=/dev/vg-test/lvm" ${lvmProvisionScript} >/dev/null
+    if grep -F -- "losetup" ${lvmProvisionScript} >/dev/null; then
+      echo "LVM provisioning unexpectedly uses losetup" >&2
+      exit 1
+    fi
     test "${
       if
         builtins.elem "d /var/lib/nixos-vm-provisioner 0755 root root -" hostSystem.config.systemd.tmpfiles.rules
+      then
+        "1"
+      else
+        "0"
+    }" = "1"
+    test "${
+      if
+        builtins.elem "d /var/lib/nixos-vm-provisioner/nvram 0700 root root -" hostSystem.config.systemd.tmpfiles.rules
       then
         "1"
       else
