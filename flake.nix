@@ -37,6 +37,7 @@
             ];
             _module.args.inputs = inputs;
           };
+        host-base = ./modules/host.nix;
         guest =
           { ... }:
           {
@@ -45,6 +46,7 @@
               inputs.disko.nixosModules.disko
             ];
           };
+        guest-base = ./modules/guest.nix;
         default = self.nixosModules.host;
       };
 

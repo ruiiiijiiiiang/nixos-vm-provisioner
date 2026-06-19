@@ -335,7 +335,6 @@ in
           before = [ "libvirtd.service" ];
           partOf = [ "libvirtd.service" ];
           path = with pkgs; [
-            blkid
             util-linux
             inputs.disko.packages.${pkgs.system}.disko-install
           ];
