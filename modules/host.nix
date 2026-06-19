@@ -283,6 +283,7 @@ in
       ++ lib.optional hasLvmGuest lvm2;
 
     virtualisation.libvirtd.enable = true;
+    virtualisation.libvirt.enable = true;
 
     systemd.tmpfiles.rules = [
       "d ${cfg.statePath} 0755 root root -"
