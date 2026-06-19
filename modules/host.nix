@@ -226,7 +226,12 @@ in
     };
     loaderVarsPath = mkOption {
       type = types.str;
-      default = "/run/libvirt/nix-ovmf/edk2-${pkgs.stdenv.hostPlatform.qemuArch}-vars.fd";
+      default =
+        let
+          arch = pkgs.stdenv.hostPlatform.qemuArch;
+          varsArch = if arch == "x86_64" then "i386" else arch;
+        in
+        "/run/libvirt/nix-ovmf/edk2-${varsArch}-vars.fd";
       description = "Path to the UEFI/OVMF firmware variables template file.";
     };
   };
