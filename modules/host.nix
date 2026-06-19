@@ -235,10 +235,14 @@ in
         let
           arch = pkgs.stdenv.hostPlatform.qemuArch;
           varsArch =
-            if arch == "x86_64" then "i386"
-            else if arch == "aarch64" then "arm"
-            else if arch == "riscv64" then "riscv"
-            else arch;
+            if arch == "x86_64" then
+              "i386"
+            else if arch == "aarch64" then
+              "arm"
+            else if arch == "riscv64" then
+              "riscv"
+            else
+              arch;
         in
         "/run/libvirt/nix-ovmf/edk2-${varsArch}-vars.fd";
       description = "Path to the UEFI/OVMF firmware variables template file.";
@@ -297,103 +301,112 @@ in
       ++ lib.optional hasLvmGuest lvm2;
 
     virtualisation.libvirtd.enable = true;
-    virtualisation.libvirt.enable = true;
+    virtualisation = {
+      libvirtd = {
+        qemu.package = pkgs.qemu_kvm;
+      };
 
-    systemd.tmpfiles.rules = [
-      "d ${cfg.statePath} 0755 root root -"
-      "d ${cfg.statePath}/nvram 0700 root root -"
-    ];
+      libvirt = {
+        enable = true;
+        connections."qemu:///system".domains = mapAttrsToList (
+          name: guest: makeDomain name guest
+        ) cfg.guests;
+      };
+    };
 
-    virtualisation.libvirt.connections."qemu:///system".domains = mapAttrsToList (
-      name: guest: makeDomain name guest
-    ) cfg.guests;
-
-    systemd.services = mkMerge (
-      mapAttrsToList (name: guest: {
-        "prepare-guest-storage@${name}" = {
-          description = "Prepare storage for guest ${name}";
-          wantedBy = [ "multi-user.target" ];
-          before = [ "provision-guest@${name}.service" ];
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-            ExecStart =
-              if guest.storage.type == "lvm" then
-                pkgs.writeShellScript "create-lvm-${name}" ''
-                  VG_NAME=${escapeShellArg cfg.volumeGroup}
-                  LV_PATH=${escapeShellArg "${cfg.volumeGroup}/${name}"}
-                  if ! ${pkgs.lvm2}/bin/vgs "$VG_NAME" >/dev/null 2>&1; then
-                    echo "Volume group '$VG_NAME' does not exist." >&2
-                    exit 1
-                  fi
-                  if ! ${pkgs.lvm2}/bin/lvs "$LV_PATH" >/dev/null 2>&1; then
-                    ${pkgs.lvm2}/bin/lvcreate -L ${escapeShellArg guest.storage.size} -n ${escapeShellArg name} "$VG_NAME"
-                  fi
-                ''
-              else if guest.storage.type == "file" then
-                pkgs.writeShellScript "create-file-${name}" ''
-                  IMAGE_PATH=${escapeShellArg (getImagePath name guest)}
-                  ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$IMAGE_PATH")"
-                  if [ ! -f "$IMAGE_PATH" ]; then
-                    ${pkgs.qemu}/bin/qemu-img create -f raw "$IMAGE_PATH" ${escapeShellArg guest.storage.size}
-                  fi
-                ''
-              else
-                "true";
+    systemd = {
+      services = mkMerge (
+        mapAttrsToList (name: guest: {
+          "prepare-guest-storage@${name}" = {
+            description = "Prepare storage for guest ${name}";
+            wantedBy = [ "multi-user.target" ];
+            before = [ "provision-guest@${name}.service" ];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              ExecStart =
+                if guest.storage.type == "lvm" then
+                  pkgs.writeShellScript "create-lvm-${name}" ''
+                    VG_NAME=${escapeShellArg cfg.volumeGroup}
+                    LV_PATH=${escapeShellArg "${cfg.volumeGroup}/${name}"}
+                    if ! ${pkgs.lvm2}/bin/vgs "$VG_NAME" >/dev/null 2>&1; then
+                      echo "Volume group '$VG_NAME' does not exist." >&2
+                      exit 1
+                    fi
+                    if ! ${pkgs.lvm2}/bin/lvs "$LV_PATH" >/dev/null 2>&1; then
+                      ${pkgs.lvm2}/bin/lvcreate -L ${escapeShellArg guest.storage.size} -n ${escapeShellArg name} "$VG_NAME"
+                    fi
+                  ''
+                else if guest.storage.type == "file" then
+                  pkgs.writeShellScript "create-file-${name}" ''
+                    IMAGE_PATH=${escapeShellArg (getImagePath name guest)}
+                    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$IMAGE_PATH")"
+                    if [ ! -f "$IMAGE_PATH" ]; then
+                      ${pkgs.qemu}/bin/qemu-img create -f raw "$IMAGE_PATH" ${escapeShellArg guest.storage.size}
+                    fi
+                  ''
+                else
+                  "true";
+            };
           };
-        };
 
-        "provision-guest@${name}" = {
-          description = "Provision NixOS guest ${name}";
-          wantedBy = [ "multi-user.target" ];
-          after = [ "prepare-guest-storage@${name}.service" ];
-          before = [ "libvirtd.service" ];
-          partOf = [ "libvirtd.service" ];
-          path = with pkgs; [
-            util-linux
-            inputs.disko.packages.${pkgs.system}.disko-install
-          ];
+          "provision-guest@${name}" = {
+            description = "Provision NixOS guest ${name}";
+            wantedBy = [ "multi-user.target" ];
+            after = [ "prepare-guest-storage@${name}.service" ];
+            before = [ "libvirtd.service" ];
+            partOf = [ "libvirtd.service" ];
+            path = with pkgs; [
+              util-linux
+              inputs.disko.packages.${pkgs.system}.disko-install
+            ];
 
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-            ExecStart = pkgs.writeShellScript "provision-${name}" ''
-              TARGET_DEV=${escapeShellArg (getTargetDev name guest)}
-              MARKER_PATH=${escapeShellArg (getGuestProvisionMarker name)}
-              ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$MARKER_PATH")"
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              ExecStart = pkgs.writeShellScript "provision-${name}" ''
+                TARGET_DEV=${escapeShellArg (getTargetDev name guest)}
+                MARKER_PATH=${escapeShellArg (getGuestProvisionMarker name)}
+                ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$MARKER_PATH")"
 
-              if [ -e "$MARKER_PATH" ]; then
-                echo "Guest ${name} was already provisioned by nixos-vm-provisioner. Skipping provisioning."
-              elif ! blkid "$TARGET_DEV" >/dev/null 2>&1; then
-                echo "Device $TARGET_DEV is unformatted. Starting disko-install..."
-                ${
-                  if guest.storage.type == "file" then
-                    ''
-                      # We must use a loop device for files so that partition block devices are created.
-                      LOOP_DEV=$(${pkgs.util-linux}/bin/losetup --show -fP "$TARGET_DEV")
-                      cleanup() {
-                        echo "Cleaning up mounts and loop device $LOOP_DEV"
-                        ${pkgs.util-linux}/bin/umount -R /mnt/disko-install-root || true
-                        ${pkgs.util-linux}/bin/losetup -d "$LOOP_DEV" || true
-                      }
-                      trap cleanup EXIT
-                      disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$LOOP_DEV"
-                    ''
-                  else
-                    ''
-                      disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV"
-                    ''
-                }
-                ${pkgs.coreutils}/bin/touch "$MARKER_PATH"
-              else
-                echo "Device $TARGET_DEV already has signatures, but no provisioning marker exists at $MARKER_PATH." >&2
-                echo "Refusing to skip provisioning automatically because the disk may not belong to this module." >&2
-                exit 1
-              fi
-            '';
+                if [ -e "$MARKER_PATH" ]; then
+                  echo "Guest ${name} was already provisioned by nixos-vm-provisioner. Skipping provisioning."
+                elif ! blkid "$TARGET_DEV" >/dev/null 2>&1; then
+                  echo "Device $TARGET_DEV is unformatted. Starting disko-install..."
+                  ${
+                    if guest.storage.type == "file" then
+                      ''
+                        # We must use a loop device for files so that partition block devices are created.
+                        LOOP_DEV=$(${pkgs.util-linux}/bin/losetup --show -fP "$TARGET_DEV")
+                        cleanup() {
+                          echo "Cleaning up mounts and loop device $LOOP_DEV"
+                          ${pkgs.util-linux}/bin/umount -R /mnt/disko-install-root || true
+                          ${pkgs.util-linux}/bin/losetup -d "$LOOP_DEV" || true
+                        }
+                        trap cleanup EXIT
+                        disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$LOOP_DEV"
+                      ''
+                    else
+                      ''
+                        disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV"
+                      ''
+                  }
+                  ${pkgs.coreutils}/bin/touch "$MARKER_PATH"
+                else
+                  echo "Device $TARGET_DEV already has signatures, but no provisioning marker exists at $MARKER_PATH." >&2
+                  echo "Refusing to skip provisioning automatically because the disk may not belong to this module." >&2
+                  exit 1
+                fi
+              '';
+            };
           };
-        };
-      }) cfg.guests
-    );
+        }) cfg.guests
+      );
+
+      tmpfiles.rules = [
+        "d ${cfg.statePath} 0755 root root -"
+        "d ${cfg.statePath}/nvram 0700 root root -"
+      ];
+    };
   };
 }
