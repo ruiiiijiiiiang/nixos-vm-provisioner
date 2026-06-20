@@ -329,12 +329,12 @@ in
                   pkgs.writeShellScript "create-lvm-${name}" ''
                     VG_NAME=${escapeShellArg cfg.volumeGroup}
                     LV_PATH=${escapeShellArg "${cfg.volumeGroup}/${name}"}
-                    if ! ${pkgs.lvm2}/bin/vgs "$VG_NAME" >/dev/null 2>&1; then
+                    if ! ${pkgs.lvm2.bin}/bin/vgs "$VG_NAME" >/dev/null 2>&1; then
                       echo "Volume group '$VG_NAME' does not exist." >&2
                       exit 1
                     fi
-                    if ! ${pkgs.lvm2}/bin/lvs "$LV_PATH" >/dev/null 2>&1; then
-                      ${pkgs.lvm2}/bin/lvcreate -L ${escapeShellArg guest.storage.size} -n ${escapeShellArg name} "$VG_NAME"
+                    if ! ${pkgs.lvm2.bin}/bin/lvs "$LV_PATH" >/dev/null 2>&1; then
+                      ${pkgs.lvm2.bin}/bin/lvcreate -L ${escapeShellArg guest.storage.size} -n ${escapeShellArg name} "$VG_NAME"
                     fi
                   ''
                 else if guest.storage.type == "file" then
