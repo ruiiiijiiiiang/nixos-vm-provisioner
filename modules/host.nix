@@ -303,7 +303,7 @@ in
     virtualisation.libvirtd.enable = true;
     virtualisation = {
       libvirtd = {
-        qemu.package = pkgs.qemu_kvm;
+        qemu.package = lib.mkDefault pkgs.qemu_kvm;
       };
 
       libvirt = {
