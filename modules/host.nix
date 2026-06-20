@@ -114,6 +114,11 @@ let
           default = [ ];
           description = "PCI devices to pass through to the guest.";
         };
+        forceProvision = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Force provisioning/formatting even if the disk already has signatures.";
+        };
       };
     };
 
@@ -438,10 +443,7 @@ in
                 MARKER_PATH=${escapeShellArg (getGuestProvisionMarker name)}
                 mkdir -p "$(dirname "$MARKER_PATH")"
 
-                if [ -e "$MARKER_PATH" ]; then
-                  echo "Guest ${name} was already provisioned by nixos-vm-provisioner. Skipping provisioning."
-                elif ! blkid "$TARGET_DEV" >/dev/null 2>&1; then
-                  echo "Device $TARGET_DEV is unformatted. Starting disko-install..."
+                run_disko_install() {
                   ${
                     if guest.storage.type == "physical" then
                       ''
@@ -460,11 +462,21 @@ in
                         disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$LOOP_DEV"
                       ''
                   }
+                }
+
+                if [ -e "$MARKER_PATH" ]; then
+                  echo "Guest ${name} was already provisioned by nixos-vm-provisioner. Skipping provisioning."
+                elif ! blkid "$TARGET_DEV" >/dev/null 2>&1; then
+                  echo "Device $TARGET_DEV is unformatted. Starting disko-install..."
+                  run_disko_install
+                  touch "$MARKER_PATH"
+                elif ${if guest.forceProvision then "true" else "false"}; then
+                  echo "Device $TARGET_DEV already has signatures, but forceProvision is enabled. Forcing disko-install..."
+                  run_disko_install
                   touch "$MARKER_PATH"
                 else
-                  echo "Device $TARGET_DEV already has signatures, but no provisioning marker exists at $MARKER_PATH." >&2
-                  echo "Refusing to skip provisioning automatically because the disk may not belong to this module." >&2
-                  exit 1
+                  echo "Device $TARGET_DEV already has signatures and forceProvision is disabled. Safely skipping provisioning."
+                  touch "$MARKER_PATH"
                 fi
               '';
             };
