@@ -118,6 +118,16 @@ let
           default = false;
           description = "Force provisioning/formatting even if the disk already has signatures.";
         };
+        autoStart = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Whether the VM should automatically start.";
+        };
+        nixvirtExtraConfigs = mkOption {
+          type = types.attrs;
+          default = { };
+          description = "Extra NixVirt domain configuration options specific to this guest.";
+        };
       };
     };
 
@@ -233,10 +243,10 @@ let
             }) guest.pciDevices;
           };
         }
-        guest.nixosConfig.config.nixos-vm-provisioner.guest.nixvirtExtraConfigs
+        guest.nixvirtExtraConfigs
       ]
     );
-    active = guest.nixosConfig.config.nixos-vm-provisioner.guest.autoStart;
+    active = guest.autoStart;
   };
 
 in

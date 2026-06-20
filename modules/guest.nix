@@ -10,16 +10,6 @@ with lib;
       default = "/dev/vda";
       description = "The root device for the guest.";
     };
-    autoStart = mkOption {
-      type = types.bool;
-      default = true;
-      description = "Whether the VM should automatically start.";
-    };
-    nixvirtExtraConfigs = mkOption {
-      type = types.attrs;
-      default = { };
-      description = "Extra NixVirt attribute sets to merge into the domain definition.";
-    };
   };
 
   config = mkIf config.nixos-vm-provisioner.guest.enable {
