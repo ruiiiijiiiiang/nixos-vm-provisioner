@@ -443,9 +443,13 @@ in
                 elif ! blkid "$TARGET_DEV" >/dev/null 2>&1; then
                   echo "Device $TARGET_DEV is unformatted. Starting disko-install..."
                   ${
-                    if guest.storage.type == "file" then
+                    if guest.storage.type == "physical" then
                       ''
-                        # We must use a loop device for files so that partition block devices are created.
+                        disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV"
+                      ''
+                    else
+                      ''
+                        # We must use a loop device so that partition block devices are created.
                         LOOP_DEV=$(losetup --show -fP "$TARGET_DEV")
                         cleanup() {
                           echo "Cleaning up mounts and loop device $LOOP_DEV"
@@ -454,10 +458,6 @@ in
                         }
                         trap cleanup EXIT
                         disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$LOOP_DEV"
-                      ''
-                    else
-                      ''
-                        disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV"
                       ''
                   }
                   touch "$MARKER_PATH"
