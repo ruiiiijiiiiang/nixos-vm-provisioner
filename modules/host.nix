@@ -97,18 +97,20 @@ let
           description = "Libvirt domain UUID. Defaults to a deterministic value derived from the guest name.";
         };
         pciDevices = mkOption {
-          type = types.listOf (types.submodule {
-            options = {
-              address = mkOption {
-                type = types.str;
-                description = "PCI address of the device (e.g. '0000:e5:00.0').";
+          type = types.listOf (
+            types.submodule {
+              options = {
+                address = mkOption {
+                  type = types.str;
+                  description = "PCI address of the device (e.g. '0000:e5:00.0').";
+                };
+                id = mkOption {
+                  type = types.str;
+                  description = "PCI Vendor:Device ID (e.g. '1002:1682').";
+                };
               };
-              id = mkOption {
-                type = types.str;
-                description = "PCI Vendor:Device ID (e.g. '1002:1682').";
-              };
-            };
-          });
+            }
+          );
           default = [ ];
           description = "PCI devices to pass through to the guest.";
         };
@@ -338,7 +340,7 @@ in
       with pkgs;
       [
         libvirt
-        qemu
+        config.virtualisation.libvirtd.qemu.package
         inputs.disko.packages.${pkgs.system}.disko-install
       ]
       ++ lib.optional hasLvmGuest lvm2;
@@ -361,12 +363,13 @@ in
       ];
     };
 
-    virtualisation.libvirtd.enable = true;
     virtualisation = {
       libvirtd = {
+        enable = true;
         qemu = {
           package = lib.mkDefault pkgs.qemu_kvm;
-        } // lib.optionalAttrs hasPciGuest {
+        }
+        // lib.optionalAttrs hasPciGuest {
           runAsRoot = true;
           verbatimConfig = ''
             user = "root"
@@ -411,7 +414,7 @@ in
                     IMAGE_PATH=${escapeShellArg (getImagePath name guest)}
                     ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$IMAGE_PATH")"
                     if [ ! -f "$IMAGE_PATH" ]; then
-                      ${pkgs.qemu}/bin/qemu-img create -f raw "$IMAGE_PATH" ${escapeShellArg guest.storage.size}
+                      ${config.virtualisation.libvirtd.qemu.package}/bin/qemu-img create -f raw "$IMAGE_PATH" ${escapeShellArg guest.storage.size}
                     fi
                   ''
                 else
