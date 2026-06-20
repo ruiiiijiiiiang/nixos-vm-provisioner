@@ -336,15 +336,6 @@ in
       ]) cfg.guests
     );
 
-    environment.systemPackages =
-      with pkgs;
-      [
-        libvirt
-        config.virtualisation.libvirtd.qemu.package
-        inputs.disko.packages.${pkgs.system}.disko-install
-      ]
-      ++ lib.optional hasLvmGuest lvm2;
-
     boot = lib.mkIf hasPciGuest {
       kernelParams = [
         "amd_iommu=on"
@@ -393,6 +384,11 @@ in
             description = "Prepare storage for guest ${name}";
             wantedBy = [ "multi-user.target" ];
             before = [ "provision-guest@${name}.service" ];
+            path = with pkgs; [
+              coreutils
+              config.virtualisation.libvirtd.qemu.package
+              lvm2.bin
+            ];
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
@@ -401,20 +397,20 @@ in
                   pkgs.writeShellScript "create-lvm-${name}" ''
                     VG_NAME=${escapeShellArg cfg.volumeGroup}
                     LV_PATH=${escapeShellArg "${cfg.volumeGroup}/${name}"}
-                    if ! ${pkgs.lvm2.bin}/bin/vgs "$VG_NAME" >/dev/null 2>&1; then
+                    if ! vgs "$VG_NAME" >/dev/null 2>&1; then
                       echo "Volume group '$VG_NAME' does not exist." >&2
                       exit 1
                     fi
-                    if ! ${pkgs.lvm2.bin}/bin/lvs "$LV_PATH" >/dev/null 2>&1; then
-                      ${pkgs.lvm2.bin}/bin/lvcreate -L ${escapeShellArg guest.storage.size} -n ${escapeShellArg name} "$VG_NAME"
+                    if ! lvs "$LV_PATH" >/dev/null 2>&1; then
+                      lvcreate -L ${escapeShellArg guest.storage.size} -n ${escapeShellArg name} "$VG_NAME"
                     fi
                   ''
                 else if guest.storage.type == "file" then
                   pkgs.writeShellScript "create-file-${name}" ''
                     IMAGE_PATH=${escapeShellArg (getImagePath name guest)}
-                    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$IMAGE_PATH")"
+                    mkdir -p "$(dirname "$IMAGE_PATH")"
                     if [ ! -f "$IMAGE_PATH" ]; then
-                      ${config.virtualisation.libvirtd.qemu.package}/bin/qemu-img create -f raw "$IMAGE_PATH" ${escapeShellArg guest.storage.size}
+                      qemu-img create -f raw "$IMAGE_PATH" ${escapeShellArg guest.storage.size}
                     fi
                   ''
                 else
@@ -429,6 +425,7 @@ in
             before = [ "libvirtd.service" ];
             partOf = [ "libvirtd.service" ];
             path = with pkgs; [
+              coreutils
               util-linux
               inputs.disko.packages.${pkgs.system}.disko-install
             ];
@@ -439,7 +436,7 @@ in
               ExecStart = pkgs.writeShellScript "provision-${name}" ''
                 TARGET_DEV=${escapeShellArg (getTargetDev name guest)}
                 MARKER_PATH=${escapeShellArg (getGuestProvisionMarker name)}
-                ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$MARKER_PATH")"
+                mkdir -p "$(dirname "$MARKER_PATH")"
 
                 if [ -e "$MARKER_PATH" ]; then
                   echo "Guest ${name} was already provisioned by nixos-vm-provisioner. Skipping provisioning."
@@ -449,11 +446,11 @@ in
                     if guest.storage.type == "file" then
                       ''
                         # We must use a loop device for files so that partition block devices are created.
-                        LOOP_DEV=$(${pkgs.util-linux}/bin/losetup --show -fP "$TARGET_DEV")
+                        LOOP_DEV=$(losetup --show -fP "$TARGET_DEV")
                         cleanup() {
                           echo "Cleaning up mounts and loop device $LOOP_DEV"
-                          ${pkgs.util-linux}/bin/umount -R /mnt/disko-install-root || true
-                          ${pkgs.util-linux}/bin/losetup -d "$LOOP_DEV" || true
+                          umount -R /mnt/disko-install-root || true
+                          losetup -d "$LOOP_DEV" || true
                         }
                         trap cleanup EXIT
                         disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$LOOP_DEV"
@@ -463,7 +460,7 @@ in
                         disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV"
                       ''
                   }
-                  ${pkgs.coreutils}/bin/touch "$MARKER_PATH"
+                  touch "$MARKER_PATH"
                 else
                   echo "Device $TARGET_DEV already has signatures, but no provisioning marker exists at $MARKER_PATH." >&2
                   echo "Refusing to skip provisioning automatically because the disk may not belong to this module." >&2
