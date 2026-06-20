@@ -206,6 +206,27 @@ guests.my-guest = {
 };
 ```
 
+### PCI Device Passthrough
+
+To pass physical PCI devices (like GPUs, NICs, etc.) directly to a guest VM, configure the `pciDevices` option on the host's guest definition:
+
+```nix
+guests.my-guest = {
+  nixosConfig = inputs.self.nixosConfigurations.my-guest;
+  pciDevices = [
+    {
+      address = "0000:e5:00.0";
+      id = "1002:1682";
+    }
+  ];
+};
+```
+
+When one or more `pciDevices` are configured:
+1. The host's `boot.kernelParams` and `boot.initrd.kernelModules` are automatically updated to bind the specified PCI Vendor:Device IDs to `vfio-pci` at boot.
+2. Libvirt QEMU is configured to run as root (required for QEMU to manage VFIO devices).
+3. The guest's libvirt XML definition is automatically populated with the corresponding `<hostdev>` blocks.
+
 ### Libvirt and NixVirt Customization
 
 Set host-wide defaults with `nixvirtDefaults`:
