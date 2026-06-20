@@ -11,7 +11,6 @@ with lib;
 
 let
   cfg = config.virtualisation.nixos-vm-provisioner;
-  hasLvmGuest = lib.any (guest: guest.storage.type == "lvm") (attrValues cfg.guests);
   hasPciGuest = lib.any (guest: guest.pciDevices != [ ]) (attrValues cfg.guests);
   passthroughIds = lib.unique (
     lib.concatMap (guest: map (dev: dev.id) guest.pciDevices) (attrValues cfg.guests)

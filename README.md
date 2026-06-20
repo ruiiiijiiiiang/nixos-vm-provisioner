@@ -237,12 +237,30 @@ Set per-guest overrides inside the guest with `nixvirtExtraConfigs`:
 ## How It Works
 
 1. The host prepares the guest's backing storage.
-2. On first boot, a systemd service checks for a host-managed provisioning marker.
-3. If the marker is missing and the target is still blank, the host runs `disko-install` against the configured flake target and disk mapping.
+2. On first boot, a systemd service checks for a host-managed provisioning marker file at `<statePath>/<guest-name>.provisioned` (defaulting to `/var/lib/nixos-vm-provisioner/<guest-name>.provisioned`).
+3. If the marker is missing and the target is still blank (or `forceProvision` is enabled), the host runs `disko-install` against the configured flake target and disk mapping.
 4. The guest installs its own UEFI bootloader onto its disk during provisioning.
 5. The host keeps a persistent per-guest NVRAM file under `/var/lib/nixos-vm-provisioner/nvram/`.
-6. After the first successful provisioning run, the host records a marker and reuses the guest disk as-is on later boots.
+6. After the first successful provisioning run, the host records the marker file and reuses the guest disk as-is on later boots.
 7. Libvirt boots the guest from its own disk through OVMF.
+
+## Safety & Re-provisioning
+
+To prevent accidental data loss, `nixos-vm-provisioner` implements multiple guardrails:
+
+1. **Provisioning Marker File**:
+   After a guest is successfully provisioned, a marker file is created on the host at `<statePath>/<guest-name>.provisioned` (which defaults to `/var/lib/nixos-vm-provisioner/<guest-name>.provisioned`). If this file exists, the host-managed provisioner always skips formatting and provisioning.
+2. **Signature Detection**:
+   If the marker file does not exist, the provisioner checks the backing device for existing filesystems/signatures (using `blkid`). If any signature is found, the provisioner will **safely skip provisioning** and create the marker file to prevent formatting an already-used disk.
+3. **Force Provisioning (`forceProvision`)**:
+   If you want to intentionally overwrite/re-provision a disk that already contains signatures, you can set the `forceProvision` option to `true` on the guest configuration:
+   ```nix
+   guests.my-guest = {
+     nixosConfig = inputs.self.nixosConfigurations.my-guest;
+     forceProvision = true;
+   };
+   ```
+   Alternatively, you can manually delete the marker file from the host at `/var/lib/nixos-vm-provisioner/<guest-name>.provisioned` (and ensure the backing disk is blank/wiped or `forceProvision` is enabled) to trigger a clean provisioning run.
 
 ## Requirements
 
