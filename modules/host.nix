@@ -402,7 +402,7 @@ in
                       exit 1
                     fi
                     if ! lvs "$LV_PATH" >/dev/null 2>&1; then
-                      lvcreate -L ${escapeShellArg guest.storage.size} -n ${escapeShellArg name} "$VG_NAME"
+                      lvcreate -y -L ${escapeShellArg guest.storage.size} -n ${escapeShellArg name} "$VG_NAME"
                     fi
                   ''
                 else if guest.storage.type == "file" then
