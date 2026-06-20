@@ -221,17 +221,15 @@ virtualisation.nixos-vm-provisioner.nixvirtDefaults = {
 };
 ```
 
-Set per-guest overrides inside the guest with `nixvirtExtraConfigs`:
+Set per-guest overrides on the host with `nixvirtExtraConfigs`:
 
 ```nix
-{
-  nixos-vm-provisioner.guest = {
-    enable = true;
-    nixvirtExtraConfigs = {
-      devices.video = [ { model.type = "qxl"; } ];
-    };
+guests.my-guest = {
+  nixosConfig = inputs.self.nixosConfigurations.my-guest;
+  nixvirtExtraConfigs = {
+    devices.video = [ { model.type = "qxl"; } ];
   };
-}
+};
 ```
 
 ## How It Works
