@@ -12,6 +12,25 @@ with lib;
 let
   cfg = config.virtualisation.nixos-vm-provisioner;
   hasLvmGuest = lib.any (guest: guest.storage.type == "lvm") (attrValues cfg.guests);
+  hasPciGuest = lib.any (guest: guest.pciDevices != [ ]) (attrValues cfg.guests);
+  passthroughIds = lib.unique (
+    lib.concatMap (guest: map (dev: dev.id) guest.pciDevices) (attrValues cfg.guests)
+  );
+
+  parsePciAddress =
+    address:
+    let
+      parts = builtins.match "([0-9a-fA-F]{4}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\\.([0-7])" address;
+    in
+    if parts == null then
+      throw "Invalid PCI address: ${address}"
+    else
+      {
+        domain = "0x" + lib.head parts;
+        bus = "0x" + lib.elemAt parts 1;
+        slot = "0x" + lib.elemAt parts 2;
+        function = "0x" + lib.elemAt parts 3;
+      };
 
   guestOpts =
     { name, config, ... }:
@@ -76,6 +95,22 @@ let
           type = types.nullOr types.str;
           default = null;
           description = "Libvirt domain UUID. Defaults to a deterministic value derived from the guest name.";
+        };
+        pciDevices = mkOption {
+          type = types.listOf (types.submodule {
+            options = {
+              address = mkOption {
+                type = types.str;
+                description = "PCI address of the device (e.g. '0000:e5:00.0').";
+              };
+              id = mkOption {
+                type = types.str;
+                description = "PCI Vendor:Device ID (e.g. '1002:1682').";
+              };
+            };
+          });
+          default = [ ];
+          description = "PCI devices to pass through to the guest.";
         };
       };
     };
@@ -182,6 +217,14 @@ let
               }
             ];
             panic = [ { model = "isa"; } ];
+            hostdev = map (dev: {
+              mode = "subsystem";
+              type = "pci";
+              managed = true;
+              source = {
+                address = parsePciAddress dev.address;
+              };
+            }) guest.pciDevices;
           };
         }
         guest.nixosConfig.config.nixos-vm-provisioner.guest.nixvirtExtraConfigs
@@ -300,10 +343,36 @@ in
       ]
       ++ lib.optional hasLvmGuest lvm2;
 
+    boot = lib.mkIf hasPciGuest {
+      kernelParams = [
+        "amd_iommu=on"
+        "intel_iommu=on"
+        "iommu=pt"
+        "vfio"
+        "vfio_pci"
+        "vfio-pci.ids=${lib.concatStringsSep "," passthroughIds}"
+        "vfio_iommu_type1"
+        "video=efifb:off"
+      ];
+      initrd.kernelModules = [
+        "vfio"
+        "vfio_pci"
+        "vfio_iommu_type1"
+      ];
+    };
+
     virtualisation.libvirtd.enable = true;
     virtualisation = {
       libvirtd = {
-        qemu.package = lib.mkDefault pkgs.qemu_kvm;
+        qemu = {
+          package = lib.mkDefault pkgs.qemu_kvm;
+        } // lib.optionalAttrs hasPciGuest {
+          runAsRoot = true;
+          verbatimConfig = ''
+            user = "root"
+            group = "root"
+          '';
+        };
       };
 
       libvirt = {
