@@ -22,7 +22,7 @@ let
       parts = builtins.match "([0-9a-fA-F]{4}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\\.([0-7])" address;
     in
     if parts == null then
-      throw "Invalid PCI address: ${address}"
+      builtins.throw "Invalid PCI address: ${address}. Expected format DDDD:BB:SS.F"
     else
       {
         domain = lib.fromHexString (lib.head parts);
