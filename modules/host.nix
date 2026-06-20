@@ -25,10 +25,10 @@ let
       throw "Invalid PCI address: ${address}"
     else
       {
-        domain = "0x" + lib.head parts;
-        bus = "0x" + lib.elemAt parts 1;
-        slot = "0x" + lib.elemAt parts 2;
-        function = "0x" + lib.elemAt parts 3;
+        domain = lib.fromHexString (lib.head parts);
+        bus = lib.fromHexString (lib.elemAt parts 1);
+        slot = lib.fromHexString (lib.elemAt parts 2);
+        function = lib.fromHexString (lib.elemAt parts 3);
       };
 
   guestOpts =
