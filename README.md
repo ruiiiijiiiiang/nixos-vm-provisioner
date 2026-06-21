@@ -89,6 +89,9 @@ The quick start above uses these defaults:
 - host state path: `/var/lib/nixos-vm-provisioner`
 - guest auto-start: `true`
 - guest root device: `/dev/vda`
+- guest ESP size: `512M`
+- guest root filesystem format: `ext4`
+- guest swap size: `null` (disabled)
 - provisioning flake target: `inputs.self.outPath#<guest-name>`
 - Disko disk name: `primary`
 - guest bootloader: `systemd-boot`
@@ -97,8 +100,8 @@ The guest module also provides a default Disko layout:
 
 - GPT partition table
 - one EFI System Partition mounted at `/boot`
-- one ext4 root filesystem
-- mounted at `/`
+- one root filesystem mounted at `/` (format defined by `rootFormat`)
+- optional swap partition (defined by `swapSize`, disabled by default)
 
 So the minimal quick start does not require:
 
@@ -223,9 +226,35 @@ guests.my-guest = {
 ```
 
 When one or more `pciDevices` are configured:
+
 1. The host's `boot.kernelParams` and `boot.initrd.kernelModules` are automatically updated to bind the specified PCI Vendor:Device IDs to `vfio-pci` at boot.
 2. Libvirt QEMU is configured to run as root (required for QEMU to manage VFIO devices).
 3. The guest's libvirt XML definition is automatically populated with the corresponding `<hostdev>` blocks.
+
+### Guest Customization
+
+The guest module (`nixosModules.guest`) provides options to customize the partitioning, filesystems, QEMU agent, and kernel parameters directly in the guest configuration:
+
+```nix
+# guest-config.nix
+{
+  nixos-vm-provisioner.guest = {
+    enable = true;
+
+    # Target device for disko (default: "/dev/vda")
+    rootDevice = "/dev/vda";
+
+    # EFI System Partition (ESP) size (default: "512M")
+    espSize = "1G";
+
+    # Root filesystem format (default: "ext4")
+    rootFormat = "btrfs";
+
+    # Optional swap partition size (default: null / disabled)
+    swapSize = "4G";
+  };
+}
+```
 
 ### Libvirt and NixVirt Customization
 
@@ -273,12 +302,14 @@ To prevent accidental data loss, `nixos-vm-provisioner` implements multiple guar
    If the marker file does not exist, the provisioner checks the backing device for existing filesystems/signatures (using `blkid`). If any signature is found, the provisioner will **safely skip provisioning** and create the marker file to prevent formatting an already-used disk.
 3. **Force Provisioning (`forceProvision`)**:
    If you want to intentionally overwrite/re-provision a disk that already contains signatures, you can set the `forceProvision` option to `true` on the guest configuration:
+
    ```nix
    guests.my-guest = {
      nixosConfig = inputs.self.nixosConfigurations.my-guest;
      forceProvision = true;
    };
    ```
+
    Alternatively, you can manually delete the marker file from the host at `/var/lib/nixos-vm-provisioner/<guest-name>.provisioned` (and ensure the backing disk is blank/wiped or `forceProvision` is enabled) to trigger a clean provisioning run.
 
 ## Requirements

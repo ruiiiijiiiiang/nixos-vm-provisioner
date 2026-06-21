@@ -454,7 +454,7 @@ in
 
                 run_disko_install() {
                   ${
-                    if guest.storage.type == "physical" then
+                    if guest.storage.type == "physical" || guest.storage.type == "lvm" then
                       ''
                         disko-install --flake ${escapeShellArg (getGuestInstallFlakeRef name guest)} --disk ${escapeShellArg guest.diskoDisk} "$TARGET_DEV"
                       ''
