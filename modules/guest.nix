@@ -5,29 +5,30 @@ with lib;
 {
   options.nixos-vm-provisioner.guest = {
     enable = mkEnableOption "NixOS-VM-Provisioner Guest configuration";
-
     rootDevice = mkOption {
       type = types.str;
       default = "/dev/vda";
       description = "The root device for the guest.";
     };
-
     espSize = mkOption {
       type = types.str;
       default = "512M";
       description = "The size of the EFI System Partition (ESP).";
     };
-
     rootFormat = mkOption {
       type = types.str;
       default = "ext4";
       description = "The filesystem format for the root partition.";
     };
-
     swapSize = mkOption {
       type = types.nullOr types.str;
       default = null;
       description = "The size of the swap partition. If null, no swap partition is created.";
+    };
+    extraPartitions = mkOption {
+      type = types.attrsOf types.attrs;
+      default = { };
+      description = "Extra disko partitions to define on the primary disk.";
     };
   };
 
@@ -40,6 +41,7 @@ with lib;
           type = "gpt";
           partitions = {
             ESP = {
+              priority = mkDefault 1;
               size = config.nixos-vm-provisioner.guest.espSize;
               type = "EF00";
               content = {
@@ -50,6 +52,7 @@ with lib;
               };
             };
             swap = mkIf (config.nixos-vm-provisioner.guest.swapSize != null) {
+              priority = mkDefault 500;
               size = config.nixos-vm-provisioner.guest.swapSize;
               content = {
                 type = "swap";
@@ -57,6 +60,7 @@ with lib;
               };
             };
             root = {
+              priority = mkDefault 1000;
               size = "100%";
               content = {
                 type = "filesystem";
@@ -64,7 +68,8 @@ with lib;
                 mountpoint = "/";
               };
             };
-          };
+          }
+          // config.nixos-vm-provisioner.guest.extraPartitions;
         };
       };
     };

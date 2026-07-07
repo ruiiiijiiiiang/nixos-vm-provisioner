@@ -181,14 +181,44 @@ guests.my-guest = {
 
 ### Custom Disk Layouts
 
-If the default GPT + ESP + ext4 root layout is not enough, define `disko.devices` in the guest configuration.
+`nixos-vm-provisioner` uses `disko` for partitioning and formatting. You can customize the layout via modular guest options, by appending custom partitions, or by writing a fully custom `disko.devices` configuration.
 
-If your guest uses a Disko disk key other than `primary`, also set `diskoDisk` on the host:
+#### 1. Guest Module Options
+
+Tweak the default partition layout (GPT with ESP, root, and optional swap) using these guest options:
+
+- `rootDevice` (default: `"/dev/vda"`): Block device inside the VM.
+- `espSize` (default: `"512M"`): Size of the EFI system partition (ESP).
+- `rootFormat` (default: `"ext4"`): Filesystem type for the root partition.
+- `swapSize` (default: `null`): Swap partition size (disabled by default).
+
+#### 2. Adding Extra Partitions (`extraPartitions`)
+
+To define extra partitions without redefining the whole layout, specify them under `extraPartitions` (which takes standard `disko` partition structures):
+
+```nix
+nixos-vm-provisioner.guest.extraPartitions.data = {
+  size = "10G";
+  content = {
+    type = "filesystem";
+    format = "ext4";
+    mountpoint = "/data";
+  };
+};
+```
+
+_Note: ESP is priority 1, swap is 500, and root is 1000. Custom partitions default to alphabetical ordering and are placed sequentially before the `root` partition (which has `size = "100%"`)._
+
+#### 3. Fully Custom Configuration
+
+If you need complex layouts (e.g., Btrfs subvolumes, LUKS, or multiple disks), declare `disko.devices` directly in the guest configuration. Since the default layout is declared with `lib.mkDefault`, your custom declaration will completely override it.
+
+If your custom configuration uses a disk key other than `"primary"` (e.g. `disk.main`), configure `diskoDisk` on the host side:
 
 ```nix
 guests.my-guest = {
   nixosConfig = inputs.self.nixosConfigurations.my-guest;
-  diskoDisk = "main";
+  diskoDisk = "main"; # Must match the disk name in guest's disko.devices.disk.<name>
 };
 ```
 
@@ -252,6 +282,18 @@ The guest module (`nixosModules.guest`) provides options to customize the partit
 
     # Optional swap partition size (default: null / disabled)
     swapSize = "4G";
+
+    # Extra partitions to define on the primary disk
+    extraPartitions = {
+      data = {
+        size = "10G";
+        content = {
+          type = "filesystem";
+          format = "ext4";
+          mountpoint = "/data";
+        };
+      };
+    };
   };
 }
 ```

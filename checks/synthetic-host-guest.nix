@@ -53,6 +53,30 @@ let
     ];
   };
 
+  customGuestSystem = nixpkgs.lib.nixosSystem {
+    inherit system;
+    modules = [
+      self.nixosModules.guest
+      (
+        { ... }:
+        {
+          system.stateVersion = "26.05";
+          nixos-vm-provisioner.guest.enable = true;
+          nixos-vm-provisioner.guest.extraPartitions = {
+            data = {
+              size = "10G";
+              content = {
+                type = "filesystem";
+                format = "ext4";
+                mountpoint = "/data";
+              };
+            };
+          };
+        }
+      )
+    ];
+  };
+
   hostSystem = nixpkgs.lib.nixosSystem {
     inherit system;
     modules = [
@@ -180,6 +204,9 @@ pkgs.runCommand "synthetic-host-guest-check"
     test "${defaultGuestSystem.config.disko.devices.disk.primary.content.partitions.ESP.content.format}" = "vfat"
     test "${defaultGuestSystem.config.disko.devices.disk.primary.content.partitions.ESP.content.mountpoint}" = "/boot"
     test "${defaultGuestSystem.config.disko.devices.disk.primary.content.partitions.root.content.format}" = "ext4"
+
+    test "${customGuestSystem.config.disko.devices.disk.primary.content.partitions.data.size}" = "10G"
+    test "${customGuestSystem.config.disko.devices.disk.primary.content.partitions.data.content.mountpoint}" = "/data"
 
     touch "$out"
   ''
