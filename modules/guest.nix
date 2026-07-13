@@ -74,6 +74,39 @@ with lib;
       };
     };
 
-    boot.loader.systemd-boot.enable = mkDefault true;
+    boot = {
+      loader = {
+        systemd-boot.enable = mkDefault true;
+      };
+      growPartition = mkDefault true;
+      kernel = {
+        sysctl = {
+          "vm.swappiness" = mkDefault 10;
+        };
+      };
+      initrd = {
+        availableKernelModules = [
+          "virtio_pci"
+          "virtio_blk"
+          "virtio_net"
+          "virtio_fs"
+          "virtio_console"
+          "sd_mod"
+          "sr_mod"
+        ];
+      };
+      kernelParams = [
+        "console=tty0"
+        "console=ttyS0"
+      ];
+    };
+
+    fileSystems = {
+      "/".autoResize = mkDefault true;
+    };
+
+    services = {
+      qemuGuest.enable = mkDefault true;
+    };
   };
 }
