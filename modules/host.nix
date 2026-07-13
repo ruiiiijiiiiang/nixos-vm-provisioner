@@ -350,18 +350,20 @@ in
       ]) cfg.guests
     );
 
-    boot = lib.mkIf hasPciGuest {
-      kernelParams = [
-        "amd_iommu=on"
-        "intel_iommu=on"
-        "iommu=pt"
+    boot = {
+      kernelModules = [
+        "vhost_net"
+        "vhost_vsock"
+        "tun"
+      ];
+      kernelParams = lib.mkIf hasPciGuest [
         "vfio"
         "vfio_pci"
         "vfio-pci.ids=${lib.concatStringsSep "," passthroughIds}"
         "vfio_iommu_type1"
         "video=efifb:off"
       ];
-      initrd.kernelModules = [
+      initrd.kernelModules = lib.mkIf hasPciGuest [
         "vfio"
         "vfio_pci"
         "vfio_iommu_type1"
