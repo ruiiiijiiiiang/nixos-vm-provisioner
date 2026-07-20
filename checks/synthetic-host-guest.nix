@@ -141,6 +141,8 @@ pkgs.runCommand "synthetic-host-guest-check"
   }
   ''
     grep -F -- "<uuid>" ${domain.definition} >/dev/null
+    grep -F -- "<vcpu placement='static'>2</vcpu>" ${domain.definition} >/dev/null
+    grep -F -- "<topology sockets='1' dies='1' cores='2' threads='1'/>" ${domain.definition} >/dev/null
     grep -F -- "<loader readonly='yes' secure='no' type='pflash'>/run/libvirt/nix-ovmf/edk2-x86_64-code.fd</loader>" ${domain.definition} >/dev/null
     grep -F -- "<nvram template='/run/libvirt/nix-ovmf/edk2-i386-vars.fd'>/var/lib/nixos-vm-provisioner/nvram/synthetic_VARS.fd</nvram>" ${domain.definition} >/dev/null
     grep -F -- "<boot dev='hd'/>" ${domain.definition} >/dev/null

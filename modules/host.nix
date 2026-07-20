@@ -179,6 +179,12 @@ let
         cfg.nixvirtDefaults
         {
           vcpu.placement = "static";
+          cpu.topology = {
+            sockets = 1;
+            dies = 1;
+            cores = guest.cpu;
+            threads = 1;
+          };
           os = {
             loader = {
               readonly = true;

@@ -324,6 +324,23 @@ guests.my-guest = {
 };
 ```
 
+The `cpu` guest option sets the total vCPU count. By default, the provisioner
+represents those vCPUs as one socket with `cpu` cores and one thread per core.
+Override the topology for a specific guest through `nixvirtExtraConfigs` when
+needed, ensuring that the topology product matches `cpu`:
+
+```nix
+guests.my-guest = {
+  cpu = 8;
+  nixvirtExtraConfigs.cpu.topology = {
+    sockets = 1;
+    dies = 1;
+    cores = 4;
+    threads = 2;
+  };
+};
+```
+
 ## How It Works
 
 1. The host prepares the guest's backing storage.
