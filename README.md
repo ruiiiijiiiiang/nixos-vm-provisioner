@@ -383,6 +383,10 @@ To prevent accidental data loss, `nixos-vm-provisioner` implements multiple guar
 
 Contributions are welcome. Bug reports, design feedback, documentation improvements, and implementation changes are all useful.
 
+## AI Usage Disclosure
+
+This project was designed and scoped manually. Development was heavily assisted by Large Language Models (LLMs), and all generated code, configurations, and documentation have been manually verified and tested.
+
 ## License
 
-This project is released under The Unlicense. See `LICENSE`.
+This project is licensed under the [MIT License](LICENSE).
