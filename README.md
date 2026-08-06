@@ -4,11 +4,24 @@
 
 The host creates the guest's backing storage, runs `disko-install` once against an unformatted target, and then boots the guest from its own disk through libvirt and NixVirt.
 
-## Compared to MicroVM-Style Workflows
+## Overview
 
-This project is primarily a first-boot provisioning tool, not a packaging format for tightly host-managed VMs.
+When running virtual machines on NixOS hypervisors, existing approaches generally fall into two extremes:
 
-Unlike `microvm`-style workflows where the guest runtime is often rebuilt and redeployed as part of the host configuration, this module installs a normal NixOS system onto its own disk and then leaves that disk alone after provisioning. The guest owns its own bootloader, kernel, and initrd, so later guest-side upgrades follow the normal NixOS model.
+- **MicroVM-style workflows (`microvm.nix`)**: Excellent for lightweight, ephemeral workloads, but tightly couples the guest runtime to the host configuration. Updating the host often rebuilds and redeploys the guest runtime, and guests do not manage standard UEFI bootloaders or independent disk lifecycles.
+- **Traditional NixVirt / Manual Libvirt VMs**: Offers full guest autonomy, but initial setup is manual and fragmented. Allocating backing disks, booting installer ISOs, partitioning, and executing `nixos-install` or `disko` must be handled manually or via custom out-of-band scripts.
+
+### What `nixos-vm-provisioner` Excels At
+
+`nixos-vm-provisioner` bridges this gap by pairing declarative hypervisor management (**NixVirt**) with automated first-boot partitioning and installation (**Disko**):
+
+- **Declarative Host-Managed Provisioning**: The hypervisor host automatically allocates guest storage (file, LVM, or raw block) and executes `disko-install` on unformatted target disks during initial boot with zero manual ISO intervention.
+- **Fully Autonomous Guest Lifecycle**: After the first successful provisioning run, the host marks the disk as provisioned and leaves it untouched. The guest owns its own UEFI bootloader, kernel, initrd, and filesystem—allowing normal guest-side upgrades (`nixos-rebuild switch`) independent of host rebuilds.
+
+### Core Design Philosophies
+
+- **Sensible Defaults**: Out of the box, `nixos-vm-provisioner` provides opinionated defaults (such as automated Disko partitioning, default CPU/memory specs, and standard storage paths), allowing users to get a VM up and running with minimal configuration.
+- **Flexible Extensibility**: While simple by default, every layer is fully customizable. Users can override storage backends (file, LVM, or raw block), disk layouts, network devices, vCPU topologies, and low-level libvirt domain settings through `nixvirtExtraConfigs` whenever more complex setups are required.
 
 ## Modules
 
