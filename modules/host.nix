@@ -10,7 +10,7 @@
 with lib;
 
 let
-  cfg = config.virtualisation.nixos-vm-provisioner;
+  cfg = config.virtualisation.nixos-vm-provisioner.host;
   hasPciGuest = lib.any (guest: guest.pciDevices != [ ]) (attrValues cfg.guests);
   passthroughIds = lib.unique (
     lib.concatMap (guest: map (dev: dev.id) guest.pciDevices) (attrValues cfg.guests)
@@ -257,7 +257,7 @@ let
 
 in
 {
-  options.virtualisation.nixos-vm-provisioner = {
+  options.virtualisation.nixos-vm-provisioner.host = {
     enable = mkEnableOption "NixOS-VM-Provisioner host module";
     volumeGroup = mkOption {
       type = types.nullOr types.str;
@@ -331,8 +331,8 @@ in
           message = "Guest VM '${name}' nixosConfig must be a valid NixOS system (e.g., self.nixosConfigurations.name).";
         }
         {
-          assertion = guest.nixosConfig.config.nixos-vm-provisioner.guest.enable or false;
-          message = "Guest VM '${name}' must have 'nixos-vm-provisioner.guest.enable = true;' set in its configuration.";
+          assertion = guest.nixosConfig.config.virtualisation.nixos-vm-provisioner.guest.enable or false;
+          message = "Guest VM '${name}' must have 'virtualisation.nixos-vm-provisioner.guest.enable = true;' set in its configuration.";
         }
         {
           assertion =

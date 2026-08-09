@@ -3,7 +3,7 @@
 with lib;
 
 {
-  options.nixos-vm-provisioner.guest = {
+  options.virtualisation.nixos-vm-provisioner.guest = {
     enable = mkEnableOption "NixOS-VM-Provisioner Guest configuration";
     rootDevice = mkOption {
       type = types.str;
@@ -32,17 +32,17 @@ with lib;
     };
   };
 
-  config = mkIf config.nixos-vm-provisioner.guest.enable {
+  config = mkIf config.virtualisation.nixos-vm-provisioner.guest.enable {
     disko.devices = mkDefault {
       disk.primary = {
         type = "disk";
-        device = config.nixos-vm-provisioner.guest.rootDevice;
+        device = config.virtualisation.nixos-vm-provisioner.guest.rootDevice;
         content = {
           type = "gpt";
           partitions = {
             ESP = {
               priority = mkDefault 1;
-              size = config.nixos-vm-provisioner.guest.espSize;
+              size = config.virtualisation.nixos-vm-provisioner.guest.espSize;
               type = "EF00";
               content = {
                 type = "filesystem";
@@ -51,9 +51,9 @@ with lib;
                 mountOptions = [ "umask=0077" ];
               };
             };
-            swap = mkIf (config.nixos-vm-provisioner.guest.swapSize != null) {
+            swap = mkIf (config.virtualisation.nixos-vm-provisioner.guest.swapSize != null) {
               priority = mkDefault 500;
-              size = config.nixos-vm-provisioner.guest.swapSize;
+              size = config.virtualisation.nixos-vm-provisioner.guest.swapSize;
               content = {
                 type = "swap";
                 discardPolicy = "both";
@@ -64,12 +64,12 @@ with lib;
               size = "100%";
               content = {
                 type = "filesystem";
-                format = config.nixos-vm-provisioner.guest.rootFormat;
+                format = config.virtualisation.nixos-vm-provisioner.guest.rootFormat;
                 mountpoint = "/";
               };
             };
           }
-          // config.nixos-vm-provisioner.guest.extraPartitions;
+          // config.virtualisation.nixos-vm-provisioner.guest.extraPartitions;
         };
       };
     };

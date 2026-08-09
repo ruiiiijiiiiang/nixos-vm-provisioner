@@ -71,7 +71,7 @@ Minimal guest configuration:
 
 ```nix
 {
-  nixos-vm-provisioner.guest.enable = true;
+  virtualisation.nixos-vm-provisioner.guest.enable = true;
 }
 ```
 
@@ -81,7 +81,7 @@ Minimal host configuration:
 
 ```nix
 { inputs, ... }: {
-  virtualisation.nixos-vm-provisioner = {
+  virtualisation.nixos-vm-provisioner.host = {
     enable = true;
     guests.my-guest.nixosConfig = inputs.self.nixosConfigurations.my-guest;
   };
@@ -128,7 +128,7 @@ If you want a slightly less minimal setup, this is a common starting point:
 
 ```nix
 { inputs, ... }: {
-  virtualisation.nixos-vm-provisioner = {
+  virtualisation.nixos-vm-provisioner.host = {
     enable = true;
 
     nixvirtDefaults = {
@@ -169,7 +169,7 @@ Use `lvm` when the guest disk should be an LV on an existing volume group:
 
 ```nix
 {
-  virtualisation.nixos-vm-provisioner = {
+  virtualisation.nixos-vm-provisioner.host = {
     enable = true;
     volumeGroup = "vg0";
 
@@ -210,7 +210,7 @@ Tweak the default partition layout (GPT with ESP, root, and optional swap) using
 To define extra partitions without redefining the whole layout, specify them under `extraPartitions` (which takes standard `disko` partition structures):
 
 ```nix
-nixos-vm-provisioner.guest.extraPartitions.data = {
+virtualisation.nixos-vm-provisioner.guest.extraPartitions.data = {
   size = "10G";
   content = {
     type = "filesystem";
@@ -281,7 +281,7 @@ The guest module (`nixosModules.guest`) provides options to customize the partit
 ```nix
 # guest-config.nix
 {
-  nixos-vm-provisioner.guest = {
+  virtualisation.nixos-vm-provisioner.guest = {
     enable = true;
 
     # Target device for disko (default: "/dev/vda")
@@ -316,7 +316,7 @@ The guest module (`nixosModules.guest`) provides options to customize the partit
 Set host-wide defaults with `nixvirtDefaults`:
 
 ```nix
-virtualisation.nixos-vm-provisioner.nixvirtDefaults = {
+virtualisation.nixos-vm-provisioner.host.nixvirtDefaults = {
   devices.network = [
     {
       type = "network";

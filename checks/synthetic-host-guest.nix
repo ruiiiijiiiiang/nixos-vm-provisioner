@@ -16,7 +16,7 @@ let
         {
           system.stateVersion = "26.05";
 
-          nixos-vm-provisioner.guest.enable = true;
+          virtualisation.nixos-vm-provisioner.guest.enable = true;
 
           disko.devices = {
             disk.main = {
@@ -47,7 +47,7 @@ let
         { ... }:
         {
           system.stateVersion = "26.05";
-          nixos-vm-provisioner.guest.enable = true;
+          virtualisation.nixos-vm-provisioner.guest.enable = true;
         }
       )
     ];
@@ -61,8 +61,8 @@ let
         { ... }:
         {
           system.stateVersion = "26.05";
-          nixos-vm-provisioner.guest.enable = true;
-          nixos-vm-provisioner.guest.extraPartitions = {
+          virtualisation.nixos-vm-provisioner.guest.enable = true;
+          virtualisation.nixos-vm-provisioner.guest.extraPartitions = {
             data = {
               size = "10G";
               content = {
@@ -86,7 +86,7 @@ let
         {
           system.stateVersion = "26.05";
 
-          virtualisation.nixos-vm-provisioner = {
+          virtualisation.nixos-vm-provisioner.host = {
             enable = true;
             guests.synthetic = {
               storage.size = "10G";
@@ -109,7 +109,7 @@ let
         {
           system.stateVersion = "26.05";
 
-          virtualisation.nixos-vm-provisioner = {
+          virtualisation.nixos-vm-provisioner.host = {
             enable = true;
             volumeGroup = "vg-test";
             guests.lvm = {
