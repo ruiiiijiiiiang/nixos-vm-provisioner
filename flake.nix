@@ -51,7 +51,7 @@
       };
 
       checks = forAllSystems (system: {
-        synthetic-host-guest = import ./checks/synthetic-host-guest.nix {
+        synthetic-host-guest = import ./checks {
           inherit self nixpkgs system;
         };
       });
