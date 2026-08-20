@@ -77,6 +77,20 @@ let
     ];
   };
 
+  disabledGuestSystem = nixpkgs.lib.nixosSystem {
+    inherit system;
+    modules = [
+      self.nixosModules.guest
+      (
+        { ... }:
+        {
+          system.stateVersion = "26.05";
+          virtualisation.nixos-vm-provisioner.guest.enable = false;
+        }
+      )
+    ];
+  };
+
   hostSystem = nixpkgs.lib.nixosSystem {
     inherit system;
     modules = [
@@ -123,6 +137,113 @@ let
     ];
   };
 
+  invalidHostSystem = nixpkgs.lib.nixosSystem {
+    inherit system;
+    modules = [
+      self.nixosModules.host
+      (
+        { ... }:
+        {
+          system.stateVersion = "26.05";
+
+          virtualisation.nixos-vm-provisioner.host = {
+            enable = true;
+            guests.invalid.nixosConfig = disabledGuestSystem;
+          };
+        }
+      )
+    ];
+  };
+
+  invalidHostEvaluation = builtins.tryEval (
+    builtins.deepSeq invalidHostSystem.config.system.build.toplevel true
+  );
+
+  makeInvalidStorageHost = guest: {
+    inherit system;
+    modules = [
+      self.nixosModules.host
+      (
+        { ... }:
+        {
+          system.stateVersion = "26.05";
+          virtualisation.nixos-vm-provisioner.host = {
+            enable = true;
+            guests.invalid = guest // { nixosConfig = guestSystem; };
+          };
+        }
+      )
+    ];
+  };
+
+  invalidLvmHostEvaluation = builtins.tryEval (
+    builtins.deepSeq
+      (nixpkgs.lib.nixosSystem (makeInvalidStorageHost { storage.type = "lvm"; })).config.system.build.toplevel
+      true
+  );
+
+  invalidPhysicalHostEvaluation = builtins.tryEval (
+    builtins.deepSeq
+      (nixpkgs.lib.nixosSystem (makeInvalidStorageHost { storage.type = "physical"; })).config.system.build.toplevel
+      true
+  );
+
+  invalidFileHostEvaluation = builtins.tryEval (
+    builtins.deepSeq
+      (nixpkgs.lib.nixosSystem (makeInvalidStorageHost { storage.size = ""; })).config.system.build.toplevel
+      true
+  );
+
+  pciHostSystem = nixpkgs.lib.nixosSystem {
+    inherit system;
+    modules = [
+      self.nixosModules.host
+      (
+        { ... }:
+        {
+          system.stateVersion = "26.05";
+          virtualisation.nixos-vm-provisioner.host = {
+            enable = true;
+            guests.pci = {
+              storage.type = "physical";
+              storage.device = "/dev/vdb";
+              nixosConfig = guestSystem;
+              pciDevices = [
+                {
+                  address = "0000:e5:00.0";
+                  id = "1002:1682";
+                }
+              ];
+            };
+          };
+        }
+      )
+    ];
+  };
+
+  forceHostSystem = nixpkgs.lib.nixosSystem {
+    inherit system;
+    modules = [
+      self.nixosModules.host
+      (
+        { ... }:
+        {
+          system.stateVersion = "26.05";
+          virtualisation.nixos-vm-provisioner.host = {
+            enable = true;
+            guests.forced = {
+              nixosConfig = guestSystem;
+              forceProvision = true;
+              flakeRef = "github:example/infra";
+              flakeAttr = "some-guest";
+              diskoDisk = "custom-disk";
+            };
+          };
+        }
+      )
+    ];
+  };
+
   domain =
     builtins.head
       hostSystem.config.virtualisation.libvirt.connections."qemu:///system".domains;
@@ -134,6 +255,13 @@ let
     lvmHostSystem.config.systemd.services."prepare-guest-storage@lvm".serviceConfig.ExecStart;
   lvmProvisionScript =
     lvmHostSystem.config.systemd.services."provision-guest@lvm".serviceConfig.ExecStart;
+  pciDomain =
+    builtins.head
+      pciHostSystem.config.virtualisation.libvirt.connections."qemu:///system".domains;
+  pciProvisionScript =
+    pciHostSystem.config.systemd.services."provision-guest@pci".serviceConfig.ExecStart;
+  forceProvisionScript =
+    forceHostSystem.config.systemd.services."provision-guest@forced".serviceConfig.ExecStart;
 in
 pkgs.runCommand "synthetic-host-guest-check"
   {
@@ -209,6 +337,26 @@ pkgs.runCommand "synthetic-host-guest-check"
 
     test "${customGuestSystem.config.disko.devices.disk.primary.content.partitions.data.size}" = "10G"
     test "${customGuestSystem.config.disko.devices.disk.primary.content.partitions.data.content.mountpoint}" = "/data"
+
+    test "${if invalidHostEvaluation.success then "0" else "1"}" = "1"
+    test "${if invalidLvmHostEvaluation.success then "0" else "1"}" = "1"
+    test "${if invalidPhysicalHostEvaluation.success then "0" else "1"}" = "1"
+    test "${if invalidFileHostEvaluation.success then "0" else "1"}" = "1"
+
+    grep -F -- "<source dev='/dev/vdb'/>" ${pciDomain.definition} >/dev/null
+    grep -F -- "<hostdev mode='subsystem' type='pci' managed='yes'>" ${pciDomain.definition} >/dev/null
+    grep -F -- "<address domain='0' bus='229' slot='0' function='0'/>" ${pciDomain.definition} >/dev/null
+    test "${
+      if builtins.elem "vfio-pci.ids=1002:1682" pciHostSystem.config.boot.kernelParams then "1" else "0"
+    }" = "1"
+    if grep -F -- "losetup" ${pciProvisionScript} >/dev/null; then
+      echo "physical provisioning unexpectedly uses losetup" >&2
+      exit 1
+    fi
+
+    grep -F -- "github:example/infra#some-guest" ${forceProvisionScript} >/dev/null
+    grep -F -- "--disk custom-disk" ${forceProvisionScript} >/dev/null
+    grep -F -- "already has signatures, but forceProvision is enabled" ${forceProvisionScript} >/dev/null
 
     touch "$out"
   ''
