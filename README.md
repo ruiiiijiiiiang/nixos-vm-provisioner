@@ -132,10 +132,11 @@ If you want a slightly less minimal setup, this is a common starting point:
     enable = true;
 
     nixvirtDefaults = {
-      devices.network = [
+      devices.interface = [
         {
           type = "network";
           source.network = "default";
+          model.type = "virtio";
         }
       ];
     };
@@ -317,10 +318,11 @@ Set host-wide defaults with `nixvirtDefaults`:
 
 ```nix
 virtualisation.nixos-vm-provisioner.host.nixvirtDefaults = {
-  devices.network = [
+  devices.interface = [
     {
       type = "network";
       source.network = "default";
+      model.type = "virtio";
     }
   ];
 };

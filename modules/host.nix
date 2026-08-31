@@ -178,7 +178,6 @@ let
         })
         cfg.nixvirtDefaults
         {
-          vcpu.placement = "static";
           cpu.topology = {
             sockets = 1;
             dies = 1;
@@ -220,15 +219,6 @@ let
                 };
               }
             ];
-            serial = [
-              {
-                type = "pty";
-                target = {
-                  type = "isa-serial";
-                  port = 0;
-                };
-              }
-            ];
             console = [
               {
                 type = "pty";
@@ -238,7 +228,7 @@ let
                 };
               }
             ];
-            panic = [ { model = "isa"; } ];
+            panic = [ { model = "pvpanic"; } ];
             hostdev = map (dev: {
               mode = "subsystem";
               type = "pci";
