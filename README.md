@@ -257,6 +257,8 @@ guests.my-guest = {
 
 To pass physical PCI devices (like GPUs, NICs, etc.) directly to a guest VM, configure the `pciDevices` option on the host's guest definition:
 
+Retrieve the full PCI address and numeric Vendor:Device ID with `lspci -Dnn` (for example, `0000:e5:00.0` and `1002:1682`) and use them as `address` and `id` below. Check the device's IOMMU group with `/sys/bus/pci/devices/<address>/iommu_group/devices/` and include any related functions that must be passed through together.
+
 ```nix
 guests.my-guest = {
   nixosConfig = inputs.self.nixosConfigurations.my-guest;
