@@ -19,7 +19,6 @@
     {
       self,
       nixpkgs,
-      NixVirt,
       ...
     }@inputs:
     let
@@ -33,9 +32,13 @@
           {
             imports = [
               ./modules/host.nix
-              NixVirt.nixosModules.default
+              inputs.NixVirt.nixosModules.default
             ];
-            _module.args.inputs = inputs;
+            _module.args = {
+              nixosVmProvisionerSelf = self;
+              nixosVmProvisionerNixVirt = inputs.NixVirt;
+              nixosVmProvisionerDisko = inputs.disko;
+            };
           };
         host-base = ./modules/host.nix;
         guest =

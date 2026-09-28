@@ -2,7 +2,9 @@
   config,
   lib,
   pkgs,
-  inputs,
+  nixosVmProvisionerSelf,
+  nixosVmProvisionerNixVirt,
+  nixosVmProvisionerDisko,
   options,
   ...
 }:
@@ -77,7 +79,7 @@ let
         };
         flakeRef = mkOption {
           type = types.str;
-          default = toString inputs.self.outPath;
+          default = toString nixosVmProvisionerSelf.outPath;
           description = "Flake URI or path passed to disko-install for this guest.";
         };
         flakeAttr = mkOption {
@@ -163,9 +165,9 @@ let
     if guest.uuid != null then guest.uuid else makeStableUuid "nixos-vm-provisioner:${name}";
 
   makeDomain = name: guest: {
-    definition = inputs.NixVirt.lib.domain.writeXML (
+    definition = nixosVmProvisionerNixVirt.lib.domain.writeXML (
       lib.foldl' lib.recursiveUpdate { } [
-        (inputs.NixVirt.lib.domain.templates.linux {
+        (nixosVmProvisionerNixVirt.lib.domain.templates.linux {
           inherit name;
           uuid = getGuestUuid name guest;
           vcpu.count = guest.cpu;
@@ -439,7 +441,7 @@ in
             path = with pkgs; [
               coreutils
               util-linux
-              inputs.disko.packages.${pkgs.system}.disko-install
+              nixosVmProvisionerDisko.packages.${pkgs.system}.disko-install
             ];
 
             serviceConfig = {
